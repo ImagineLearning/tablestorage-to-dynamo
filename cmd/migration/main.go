@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/tablestorage-to-dynamo-migration/internal/app/migration"
+	"github.com/tablestorage-to-dynamo/internal/app/migration"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/kelseyhightower/envconfig"
-	dp "github.com/tablestorage-to-dynamo-migration/internal/pkg/dataprovider"
+	dp "github.com/tablestorage-to-dynamo/internal/pkg/dataprovider"
 )
 
 type MigrationConfig struct {

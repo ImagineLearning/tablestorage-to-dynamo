@@ -1,4 +1,4 @@
-# tablestorage-to-dynamo-migration
+# tablestorage-to-dynamo
 Script written in go to migrate from table storage to dynamo db.
 
 ### Introduction

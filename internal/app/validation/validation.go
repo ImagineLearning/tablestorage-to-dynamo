@@ -4,8 +4,8 @@ package validation
 // 	"sync"
 
 // 	"github.com/Azure/azure-sdk-for-go/storage"
-// 	"github.com/tablestorage-to-dynamo-migration/internal/app/migration"
-// 	dp "github.com/tablestorage-to-dynamo-migration/internal/pkg/dataprovider"
+// 	"github.com/tablestorage-to-dynamo/internal/app/migration"
+// 	dp "github.com/tablestorage-to-dynamo/internal/pkg/dataprovider"
 // )
 
 // type Validation struct {

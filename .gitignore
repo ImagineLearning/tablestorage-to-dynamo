@@ -17,3 +17,4 @@
 *.csv
 *.vscode
 *debug
+*sealed-secret*
