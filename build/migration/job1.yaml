@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ts-to-dynamo-migration-job-1
+  namespace: migration
+spec:
+  template:
+    spec:
+      containers:
+      - name: ts-to-dynamo-migration
+        image: ilprovo/ts-to-dynamo-migration:v1.0.2
+        env:
+          - name: AWS_ACCESS_KEY_ID 
+            valueFrom:
+              secretKeyRef:
+                name: migration-secret
+                key: AWS_ACCESS_KEY_ID 
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: migration-secret
+                key: AWS_SECRET_ACCESS_KEY 
+          - name: DYNAMO_REGION
+            valueFrom:
+              secretKeyRef:
+                name: migration-secret
+                key: DYNAMO_REGION
+          - name: DYNAMO_TABLENAME
+            valueFrom:
+              secretKeyRef:
+                name: migration-secret
+                key: DYNAMO_TABLENAME
+          - name: TABLESTORAGE_ACCOUNTKEY
+            valueFrom:
+              secretKeyRef:
+                name: migration-secret
+                key: TABLESTORAGE_ACCOUNTKEY 
+          - name: TABLESTORAGE_ACCOUNTNAME
+            valueFrom:
+              secretKeyRef:
+                name: migration-secret
+                key: TABLESTORAGE_ACCOUNTNAME
+          - name: TABLESTORAGE_COLUMNNAMES
+            valueFrom:
+              secretKeyRef:
+                name: migration-secret
+                key: TABLESTORAGE_COLUMNNAMES
+          - name: TABLESTORAGE_TABLENAME
+            valueFrom:
+              secretKeyRef:
+                name: migration-secret
+                key: TABLESTORAGE_TABLENAME
+          - name: NUMWORKERS 
+            value: "50"
+          - name: STARTDATEOFFSET 
+            value: "100"
+          - name: ENDDATEOFFSET 
+            value: "50"
+          - name: BUFFERSIZE 
+            value: "500"
+      restartPolicy: Never
+  backoffLimit: 4
