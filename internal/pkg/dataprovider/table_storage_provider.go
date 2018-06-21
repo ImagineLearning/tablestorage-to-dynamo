@@ -39,7 +39,7 @@ func NewTableStorageProvider(config TableStorageConfig) TableStorageProvider {
 }
 
 // ReadRange queries table storage on a range and returns the response
-func (provider *TableStorageProvider) ReadRange(queryRange QueryRange) []*storage.Entity {
+func (provider *TableStorageProvider) ReadRange(queryRange QueryRange) ([]*storage.Entity, error) {
 	results := []*storage.Entity{}
 	filter := fmt.Sprintf("PartitionKey ge '%v' and PartitionKey lt '%v'", queryRange.Ge, queryRange.Lt)
 	options := storage.QueryOptions{
@@ -48,7 +48,8 @@ func (provider *TableStorageProvider) ReadRange(queryRange QueryRange) []*storag
 
 	result, err := provider.Table.QueryEntities(30, storage.FullMetadata, &options)
 	if err != nil {
-		log.Println(err)
+		log.Printf("Error reading range from table storage: %v", err)
+		return nil, err
 	}
 
 	results = append(results, result.Entities...)
@@ -56,10 +57,11 @@ func (provider *TableStorageProvider) ReadRange(queryRange QueryRange) []*storag
 	for result.NextLink != nil {
 		result, err = result.NextResults(nil)
 		if err != nil {
-			log.Println(err)
+			log.Printf("Error reading next page from table storage: %v", err)
+			return nil, err
 		}
 
 		results = append(results, result.Entities...)
 	}
-	return results
+	return results, nil
 }

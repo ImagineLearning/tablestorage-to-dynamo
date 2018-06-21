@@ -31,7 +31,12 @@ func (worker *TableStorageReadWorker) Start(tableStorage *TableStorageProvider, 
 			worker.WorkerPool <- worker.Work
 			select {
 			case queryRange := <-worker.Work:
-				entities := tableStorage.ReadRange(queryRange)
+				entities, err := tableStorage.ReadRange(queryRange)
+
+				if err != nil {
+					break
+				}
+
 				if len(entities) > 0 {
 					log.Printf("Adding %v entities to work queue from table storage on query range ge: %v and lt: %v.\n", len(entities), queryRange.Ge, queryRange.Lt)
 					workQueue <- DynamoWriteBatch{queryRange: queryRange, entities: entities}

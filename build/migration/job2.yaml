@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
       - name: ts-to-dynamo-migration
-        image: ilprovo/ts-to-dynamo-migration:v1.0.4
+        image: ilprovo/ts-to-dynamo-migration:v1.0.5
         env:
           - name: AWS_ACCESS_KEY_ID 
             valueFrom:
@@ -51,7 +51,7 @@ spec:
                 name: session-migration-secret
                 key: TABLESTORAGE_TABLENAME
           - name: NUMWORKERS 
-            value: "2000"
+            value: "1000"
           - name: BUFFERSIZE 
             value: "1000"
           - name: RANGES
