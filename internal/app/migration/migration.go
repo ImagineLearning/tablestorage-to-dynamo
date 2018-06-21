@@ -108,9 +108,9 @@ func (migration *Migration) GenerateRanges(ranges chan string) chan string {
 
 func (migration *Migration) DispatchReadWork(alreadyMigrated []dp.QueryRange) {
 
-	rangeQueue := make(chan string, 4096)
+	rangeQueue := make(chan string, 10000)
 
-	for currentPrecision, maxPrecision := 0, 10; currentPrecision < maxPrecision; currentPrecision++ {
+	for currentPrecision, maxPrecision := 0, 5; currentPrecision < maxPrecision; currentPrecision++ {
 		rangeQueue = migration.GenerateRanges(rangeQueue)
 	}
 	close(rangeQueue)

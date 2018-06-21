@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
       - name: ts-to-dynamo-migration
-        image: ilprovo/ts-to-dynamo-migration:v1.0.3
+        image: ilprovo/ts-to-dynamo-migration:v1.0.4
         env:
           - name: AWS_ACCESS_KEY_ID 
             valueFrom:
