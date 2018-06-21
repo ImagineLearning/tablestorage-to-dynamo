@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ts-to-dynamo-migration-job-2
+  name: ts-to-dynamo-migration-job-3
   namespace: migration
 spec:
   template:
@@ -55,6 +55,6 @@ spec:
           - name: BUFFERSIZE 
             value: "1000"
           - name: RANGES
-            value: "5,6,7,8,9,a"
+            value: "a,b,c,d,e,f"
       restartPolicy: Never
   backoffLimit: 4

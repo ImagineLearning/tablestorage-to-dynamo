@@ -1,7 +1,10 @@
 package dataprovider
 
 import (
+	"sync"
 	"testing"
+
+	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
 func TestNewTableStorageProvider(t *testing.T) {
@@ -23,8 +26,11 @@ func TestNewDateRange(t *testing.T) {
 func TestReadFromTableStorage(t *testing.T) {
 
 	provider := NewTableStorageProvider(Config.TableStorage)
-	entities := provider.ReadDateRange(NewDateRange(1, 1))
+	results := make(chan []*storage.Entity, 10)
+	wg := new(sync.WaitGroup)
+	provider.ReadDateRange(NewDateRange(1, 1), results, wg)
 
+	entities := <-results
 	if len(entities) == 0 {
 		t.Errorf("Data could not be read from table storage.")
 	}

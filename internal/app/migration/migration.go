@@ -1,7 +1,7 @@
 package migration
 
 import (
-	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -10,12 +10,11 @@ import (
 )
 
 type MigrationConfig struct {
-	Dynamo          dp.DynamoConfig
-	TableStorage    dp.TableStorageConfig
-	NumWorkers      int `default:"100"`
-	StartDateOffset int `required:"true"`
-	EndDateOffset   int `required:"true"`
-	BufferSize      int `default:"500"`
+	Dynamo       dp.DynamoConfig
+	TableStorage dp.TableStorageConfig
+	NumWorkers   int `default:"100"`
+	BufferSize   int `default:"500"`
+	Ranges       []string
 }
 
 func LoadMigrationConfig() MigrationConfig {
@@ -25,7 +24,7 @@ func LoadMigrationConfig() MigrationConfig {
 	err := envconfig.Process("DYNAMO", &dynamoConfig)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		os.Exit(1)
 	}
 	config.Dynamo = dynamoConfig
@@ -34,7 +33,7 @@ func LoadMigrationConfig() MigrationConfig {
 	err = envconfig.Process("TABLESTORAGE", &tsConfig)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		os.Exit(1)
 	}
 	config.TableStorage = tsConfig
@@ -42,7 +41,7 @@ func LoadMigrationConfig() MigrationConfig {
 	err = envconfig.Process("", &config)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		os.Exit(1)
 	}
 
@@ -52,6 +51,7 @@ func LoadMigrationConfig() MigrationConfig {
 type Migration struct {
 	TableStorage    dp.TableStorageProvider
 	Dynamo          dp.DynamoProvider
+	Status          dp.DynamoProvider
 	ReadWorkQueue   dp.TableStorageReadWork
 	ReadWorkerPool  chan dp.TableStorageReadWork
 	WriteWorkQueue  dp.DynamoWriteWork
@@ -62,10 +62,13 @@ type Migration struct {
 
 // NewMigration returns a migration which has the table storage table, work queue, wait group, etc
 func NewMigration(migrationConfig MigrationConfig) Migration {
+	statusProvider := dp.NewDynamoProvier(migrationConfig.Dynamo)
+	statusProvider.NewMigrationStatusTable()
 
 	return Migration{
 		TableStorage:    dp.NewTableStorageProvider(migrationConfig.TableStorage),
 		Dynamo:          dp.NewDynamoProvier(migrationConfig.Dynamo),
+		Status:          statusProvider,
 		ReadWorkQueue:   make(dp.TableStorageReadWork, migrationConfig.BufferSize),
 		ReadWorkerPool:  make(chan dp.TableStorageReadWork, migrationConfig.NumWorkers),
 		WriteWorkQueue:  make(dp.DynamoWriteWork, migrationConfig.BufferSize),
@@ -75,16 +78,68 @@ func NewMigration(migrationConfig MigrationConfig) Migration {
 	}
 }
 
-// Start starts migrating data from table storage to dynamo using a dispatch, worker pool, work queue pattern
+func QueryRangeHasBeenMigrated(alreadyMigrated []dp.QueryRange, queryRange dp.QueryRange) bool {
+	for _, value := range alreadyMigrated {
+		if value.Ge == queryRange.Ge && value.Lt == queryRange.Lt {
+			return true
+		}
+	}
+	return false
+}
+
+func (migration *Migration) GenerateRanges(ranges chan string) chan string {
+	newRanges := make(chan string, 10000)
+
+	if len(ranges) == 0 {
+		for _, hexCode := range migration.Config.Ranges {
+			ranges <- hexCode
+		}
+		return ranges
+	}
+
+	close(ranges)
+	for elem := range ranges {
+		for _, hexCode := range migration.Config.Ranges {
+			newRanges <- elem + hexCode
+		}
+	}
+	return newRanges
+}
+
+func (migration *Migration) DispatchReadWork(alreadyMigrated []dp.QueryRange) {
+
+	rangeQueue := make(chan string, 4096)
+
+	for currentPrecision, maxPrecision := 0, 10; currentPrecision < maxPrecision; currentPrecision++ {
+		rangeQueue = migration.GenerateRanges(rangeQueue)
+	}
+	close(rangeQueue)
+
+	ge := <-rangeQueue
+	queryRange := dp.QueryRange{Ge: ge}
+
+	for lt := range rangeQueue {
+		queryRange.Lt = lt
+
+		if !QueryRangeHasBeenMigrated(alreadyMigrated, queryRange) {
+			migration.WaitGrp.Add(1)
+			migration.ReadWorkQueue <- queryRange
+		}
+
+		queryRange.Ge = lt
+	}
+}
+
+// Start stars migrating data from table storage to dynamo using a dispatch, worker pool, work queue pattern
 func (migration *Migration) Start() {
 
 	// Create and start workers
 	for i := 0; i < migration.Config.NumWorkers; i++ {
 		readWorker := dp.NewTableStorageReadWorker(i+1, migration.ReadWorkerPool)
-		readWorker.Start(&migration.TableStorage, migration.WriteWorkQueue, migration.WaitGrp)
+		readWorker.Start(&migration.TableStorage, &migration.Status, migration.WriteWorkQueue, migration.WaitGrp)
 
 		writeWorker := dp.NewDynamoWriteWorker(i+1, migration.WriteWorkerPool)
-		writeWorker.Start(&migration.Dynamo, &migration.Config.TableStorage.ColumnNames, migration.WaitGrp)
+		writeWorker.Start(&migration.Dynamo, &migration.Status, &migration.Config.TableStorage.ColumnNames, migration.WaitGrp)
 	}
 
 	// Dispatch work
@@ -105,14 +160,16 @@ func (migration *Migration) Start() {
 		}
 	}()
 
-	// Generate work
-	for i := migration.Config.StartDateOffset; i > 0; i-- {
-		migration.WaitGrp.Add(1)
-		migration.ReadWorkQueue <- dp.NewDateRange(i, 1)
-	}
+	alreadyMigrated := migration.Status.ScanStatusTable()
+
+	// Create and dispatch read work
+	migration.DispatchReadWork(alreadyMigrated)
 
 	// Wait for work to be completed
 	migration.WaitGrp.Wait()
+
+	// Clean up status table if migration completed.
+	// migration.Status.DeleteMigrationStatusTable()
 }
 
 //Undo deletes data from table storage in dynamo, or in other words, undos the migration.
@@ -121,7 +178,7 @@ func (migration *Migration) Undo() {
 	// Create and start workers
 	for i := 0; i < migration.Config.NumWorkers; i++ {
 		readWorker := dp.NewTableStorageReadWorker(i+1, migration.ReadWorkerPool)
-		readWorker.Start(&migration.TableStorage, migration.WriteWorkQueue, migration.WaitGrp)
+		readWorker.Start(&migration.TableStorage, &migration.Status, migration.WriteWorkQueue, migration.WaitGrp)
 
 		writeWorker := dp.NewDynamoWriteWorker(i+1, migration.WriteWorkerPool)
 		writeWorker.StartDelete(&migration.Dynamo, migration.WaitGrp)
@@ -145,11 +202,8 @@ func (migration *Migration) Undo() {
 		}
 	}()
 
-	// Generate work
-	for i := migration.Config.StartDateOffset; i > migration.Config.EndDateOffset; i-- {
-		migration.WaitGrp.Add(1)
-		migration.ReadWorkQueue <- dp.NewDateRange(i, 1)
-	}
+	// Create and dispatch read work
+	migration.DispatchReadWork([]dp.QueryRange{})
 
 	// Wait for work to be completed
 	migration.WaitGrp.Wait()

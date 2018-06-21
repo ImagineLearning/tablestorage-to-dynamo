@@ -39,7 +39,12 @@ func (worker *DynamoReadWorker) Stop() {
 	}()
 }
 
-type DynamoWriteWork chan []*storage.Entity
+type DynamoWriteBatch struct {
+	queryRange QueryRange
+	entities   []*storage.Entity
+}
+
+type DynamoWriteWork chan DynamoWriteBatch
 
 type DynamoWriteWorker struct {
 	ID         int
@@ -69,13 +74,15 @@ func StorageEntityToDynamoMap(entity *storage.Entity, columnNames *[]string) map
 	dynamoMap := map[string]*dynamodb.AttributeValue{
 		"PartitionKey": {S: aws.String(entity.PartitionKey)},
 		"RowKey":       {S: aws.String(entity.RowKey)},
-		"Timestamp":    {S: aws.String(entity.TimeStamp.String())},
+		"Timestamp":    {S: aws.String(entity.TimeStamp.UTC().Format("2006-01-02T15:04:05.999999Z"))},
 	}
 
 	for _, key := range *columnNames {
 		switch value := entity.Properties[key].(type) {
 		case string:
-			dynamoMap[key] = &dynamodb.AttributeValue{S: aws.String(value)}
+			if value != "" {
+				dynamoMap[key] = &dynamodb.AttributeValue{S: aws.String(value)}
+			}
 		case int32:
 			dynamoMap[key] = &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(int64(value), 10))}
 		case int64:
@@ -85,27 +92,31 @@ func StorageEntityToDynamoMap(entity *storage.Entity, columnNames *[]string) map
 		case bool:
 			dynamoMap[key] = &dynamodb.AttributeValue{BOOL: aws.Bool(value)}
 		case time.Time:
-			dynamoMap[key] = &dynamodb.AttributeValue{S: aws.String(value.String())}
+			dynamoMap[key] = &dynamodb.AttributeValue{S: aws.String(value.UTC().Format("2006-01-02T15:04:05.999999Z"))}
 		}
 	}
 
 	return dynamoMap
 }
 
-func (worker *DynamoWriteWorker) Start(dynamo *DynamoProvider, columnNames *[]string, wg *sync.WaitGroup) {
+func (worker *DynamoWriteWorker) Start(dynamo *DynamoProvider, status *DynamoProvider, columnNames *[]string, wg *sync.WaitGroup) {
 	go func() {
 		for {
 			worker.WorkerPool <- worker.Work
 			select {
-			case entities := <-worker.Work:
-				log.Printf("Worker %v: Recieved write work request for %v entities\n", worker.ID, len(entities))
-				dynamoMapList := make([]map[string]*dynamodb.AttributeValue, len(entities))
-				for i, entity := range entities {
+			case writeBatch := <-worker.Work:
+				log.Printf("Write worker %v: Recieved write work request for %v entities\n", worker.ID, len(writeBatch.entities))
+
+				dynamoMapList := make([]map[string]*dynamodb.AttributeValue, len(writeBatch.entities))
+				for i, entity := range writeBatch.entities {
 					dynamoMapList[i] = StorageEntityToDynamoMap(entity, columnNames)
 				}
+
 				dynamo.WriteToDynamo(dynamoMapList, GetDynamoPutRequests)
+				status.WriteQueryRangeSuccess(writeBatch.queryRange)
+
+				log.Printf("Write worker %v: Finished write work request for %v entities\n", worker.ID, len(writeBatch.entities))
 				wg.Done()
-				log.Printf("Worker %v: Finished write work request for %v entities\n", worker.ID, len(entities))
 			case <-worker.QuitChan:
 				fmt.Printf("worker%d: Stopping.", worker.ID)
 				return
@@ -119,12 +130,17 @@ func (worker *DynamoWriteWorker) StartDelete(dynamo *DynamoProvider, wg *sync.Wa
 		for {
 			worker.WorkerPool <- worker.Work
 			select {
-			case entities := <-worker.Work:
-				dynamoMapList := make([]map[string]*dynamodb.AttributeValue, len(entities))
-				for i, entity := range entities {
+			case writeBatch := <-worker.Work:
+				log.Printf("Write worker %v: Recieved delete work request for %v entities\n", worker.ID, len(writeBatch.entities))
+
+				dynamoMapList := make([]map[string]*dynamodb.AttributeValue, len(writeBatch.entities))
+				for i, entity := range writeBatch.entities {
 					dynamoMapList[i] = StorageEntityToDynamoKey(entity)
 				}
+
 				dynamo.WriteToDynamo(dynamoMapList, GetDynamoDeleteRequests)
+
+				log.Printf("Write worker %v: Finished delete work request for %v entities\n", worker.ID, len(writeBatch.entities))
 				wg.Done()
 			case <-worker.QuitChan:
 				fmt.Printf("worker%d: Stopping.", worker.ID)

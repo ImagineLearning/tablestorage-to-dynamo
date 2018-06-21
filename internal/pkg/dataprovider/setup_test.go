@@ -1,7 +1,7 @@
 package dataprovider
 
 import (
-	"fmt"
+	"log"
 	"os"
 	"testing"
 
@@ -24,7 +24,7 @@ func LoadTestingConfig() TestingConfig {
 	err := envconfig.Process("DYNAMO", &dynamoConfig)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		os.Exit(1)
 	}
 	testingConfig.Dynamo = dynamoConfig
@@ -33,7 +33,7 @@ func LoadTestingConfig() TestingConfig {
 	err = envconfig.Process("TABLESTORAGE", &tsConfig)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		os.Exit(1)
 	}
 	testingConfig.TableStorage = tsConfig
