@@ -24,7 +24,7 @@ package validation
 
 // 	return Validation{
 // 		TableStorage:            dp.NewTableStorageProvider(migrationConfig.TableStorage),
-// 		Dynamo:                  dp.NewDynamoProvier(migrationConfig.Dynamo),
+// 		Dynamo:                  dp.NewDynamoProvider(migrationConfig.Dynamo),
 // 		TableStorageWorkQueue:   make(chan dp.DateRange, migrationConfig.BufferSize),
 // 		TableStorageWorkerQueue: make(chan chan dp.DateRange, migrationConfig.NumWorkers),
 // 		DynamoWorkQueue:         make(chan []*storage.Entity, migrationConfig.BufferSize),

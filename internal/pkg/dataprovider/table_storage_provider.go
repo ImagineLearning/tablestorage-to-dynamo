@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
+// TableStorageConfig all config data required to init table storage connection
 type TableStorageConfig struct {
 	AccountName string   `required:"true"`
 	AccountKey  string   `required:"true"`
@@ -14,16 +15,12 @@ type TableStorageConfig struct {
 	ColumnNames []string `required:"true"` // an array of column names other than partition key, row key, and timestamp
 }
 
+// TableStorageProvider reference to table storage table
 type TableStorageProvider struct {
 	Table *storage.Table
 }
 
-type QueryRange struct {
-	Ge string
-	Lt string
-}
-
-// InitTableStorageProvider connects to table storage and dynamo tables
+// NewTableStorageProvider connects to table storage and dynamo tables
 func NewTableStorageProvider(config TableStorageConfig) TableStorageProvider {
 	cli, err := storage.NewBasicClient(config.AccountName, config.AccountKey)
 
@@ -35,6 +32,20 @@ func NewTableStorageProvider(config TableStorageConfig) TableStorageProvider {
 
 	return TableStorageProvider{
 		Table: tableService.GetTableReference(config.TableName),
+	}
+}
+
+// QueryRange query on partition key in the range greater than equal to Ge and less than Lt
+type QueryRange struct {
+	Ge string
+	Lt string
+}
+
+// NewQueryRange builds a new query range from ge and lt
+func NewQueryRange(ge string, lt string) QueryRange {
+	return QueryRange{
+		Ge: ge,
+		Lt: lt,
 	}
 }
 

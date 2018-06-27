@@ -9,12 +9,17 @@ import (
 	dp "github.com/tablestorage-to-dynamo/internal/pkg/dataprovider"
 )
 
+var (
+	hexCodes = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"}
+)
+
 type MigrationConfig struct {
-	Dynamo       dp.DynamoConfig
-	TableStorage dp.TableStorageConfig
-	NumWorkers   int `default:"100"`
-	BufferSize   int `default:"500"`
-	Ranges       []string
+	Dynamo         dp.DynamoConfig
+	TableStorage   dp.TableStorageConfig
+	NumWorkers     int      `default:"100"`
+	BufferSize     int      `default:"500"`
+	Ranges         []string `required:"true"`
+	RangePrecision int      `default:"3"`
 }
 
 func LoadMigrationConfig() MigrationConfig {
@@ -62,12 +67,12 @@ type Migration struct {
 
 // NewMigration returns a migration which has the table storage table, work queue, wait group, etc
 func NewMigration(migrationConfig MigrationConfig) Migration {
-	statusProvider := dp.NewDynamoProvier(migrationConfig.Dynamo)
+	statusProvider := dp.NewMigrationStatusProvider(migrationConfig.Dynamo)
 	statusProvider.NewMigrationStatusTable()
 
 	return Migration{
 		TableStorage:    dp.NewTableStorageProvider(migrationConfig.TableStorage),
-		Dynamo:          dp.NewDynamoProvier(migrationConfig.Dynamo),
+		Dynamo:          dp.NewDynamoProvider(migrationConfig.Dynamo),
 		Status:          statusProvider,
 		ReadWorkQueue:   make(dp.TableStorageReadWork, migrationConfig.BufferSize),
 		ReadWorkerPool:  make(chan dp.TableStorageReadWork, migrationConfig.NumWorkers),
@@ -78,7 +83,7 @@ func NewMigration(migrationConfig MigrationConfig) Migration {
 	}
 }
 
-func QueryRangeHasBeenMigrated(alreadyMigrated []dp.QueryRange, queryRange dp.QueryRange) bool {
+func queryRangeHasBeenMigrated(alreadyMigrated []dp.QueryRange, queryRange dp.QueryRange) bool {
 	for _, value := range alreadyMigrated {
 		if value.Ge == queryRange.Ge && value.Lt == queryRange.Lt {
 			return true
@@ -87,41 +92,41 @@ func QueryRangeHasBeenMigrated(alreadyMigrated []dp.QueryRange, queryRange dp.Qu
 	return false
 }
 
-func (migration *Migration) GenerateRanges(ranges chan string) chan string {
-	newRanges := make(chan string, 10000)
+func (migration *Migration) generateRanges(ranges chan string, currentPrecision int) {
+	if currentPrecision == migration.Config.RangePrecision {
+		ranges <- migration.Config.Ranges[len(migration.Config.Ranges)-1]
+		return
+	}
 
 	if len(ranges) == 0 {
-		for _, hexCode := range migration.Config.Ranges {
+		for _, hexCode := range migration.Config.Ranges[0 : len(migration.Config.Ranges)-1] {
 			ranges <- hexCode
 		}
-		return ranges
-	}
-
-	close(ranges)
-	for elem := range ranges {
-		for _, hexCode := range migration.Config.Ranges {
-			newRanges <- elem + hexCode
+	} else {
+		for i := len(ranges); i > 0; i-- {
+			elem := <-ranges
+			for _, code := range hexCodes {
+				ranges <- elem + code
+			}
 		}
 	}
-	return newRanges
+
+	currentPrecision++
+	migration.generateRanges(ranges, currentPrecision)
 }
 
-func (migration *Migration) DispatchReadWork(alreadyMigrated []dp.QueryRange) {
+func (migration *Migration) dispatchReadWork(alreadyMigrated []dp.QueryRange) {
+	ranges := make(chan string, 150000)
+	migration.generateRanges(ranges, 0)
 
-	rangeQueue := make(chan string, 10000)
-
-	for currentPrecision, maxPrecision := 0, 5; currentPrecision < maxPrecision; currentPrecision++ {
-		rangeQueue = migration.GenerateRanges(rangeQueue)
-	}
-	close(rangeQueue)
-
-	ge := <-rangeQueue
+	close(ranges)
+	ge := <-ranges
 	queryRange := dp.QueryRange{Ge: ge}
 
-	for lt := range rangeQueue {
+	for lt := range ranges {
 		queryRange.Lt = lt
 
-		if !QueryRangeHasBeenMigrated(alreadyMigrated, queryRange) {
+		if !queryRangeHasBeenMigrated(alreadyMigrated, queryRange) {
 			migration.WaitGrp.Add(1)
 			migration.ReadWorkQueue <- queryRange
 		}
@@ -163,16 +168,13 @@ func (migration *Migration) Start() {
 	alreadyMigrated := migration.Status.ScanStatusTable()
 
 	// Create and dispatch read work
-	migration.DispatchReadWork(alreadyMigrated)
+	migration.dispatchReadWork(alreadyMigrated)
 
 	// Wait for work to be completed
 	migration.WaitGrp.Wait()
-
-	// Clean up status table if migration completed.
-	// migration.Status.DeleteMigrationStatusTable()
 }
 
-//Undo deletes data from table storage in dynamo, or in other words, undos the migration.
+//Undo deletes data from table storage in dynamo, or in other words, undoes the migration.
 func (migration *Migration) Undo() {
 
 	// Create and start workers
@@ -203,7 +205,7 @@ func (migration *Migration) Undo() {
 	}()
 
 	// Create and dispatch read work
-	migration.DispatchReadWork([]dp.QueryRange{})
+	migration.dispatchReadWork([]dp.QueryRange{})
 
 	// Wait for work to be completed
 	migration.WaitGrp.Wait()
