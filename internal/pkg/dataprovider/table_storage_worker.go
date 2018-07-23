@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-type TableStorageReadWork chan DateRange
+type TableStorageReadWork chan QueryRange
 
 type TableStorageReadWorker struct {
 	ID         int
@@ -25,17 +25,24 @@ func NewTableStorageReadWorker(id int, workerPool chan TableStorageReadWork) Tab
 	return worker
 }
 
-func (worker *TableStorageReadWorker) Start(tableStorage *TableStorageProvider, workQueue DynamoWriteWork, wg *sync.WaitGroup) {
+func (worker *TableStorageReadWorker) Start(tableStorage *TableStorageProvider, status *DynamoProvider, workQueue DynamoWriteWork, wg *sync.WaitGroup) {
 	go func() {
 		for {
 			worker.WorkerPool <- worker.Work
 			select {
-			case dateRange := <-worker.Work:
-				entities := tableStorage.ReadDateRange(dateRange)
+			case queryRange := <-worker.Work:
+				log.Printf("Read worker %v: Recieved read work request on range ge: %v and lt: %v\n", worker.ID, queryRange.Ge, queryRange.Lt)
+				entities, err := tableStorage.ReadRange(queryRange)
+
+				if err != nil {
+					break
+				}
+
 				if len(entities) > 0 {
-					log.Printf("Read %v from table storage on date range from: %v to: %v. Adding entities to work queue.\n", len(entities), dateRange.FromDate, dateRange.ToDate)
-					workQueue <- entities
+					log.Printf("Read worker %v: Adding %v entities to work queue.\n", worker.ID, len(entities))
+					workQueue <- DynamoWriteBatch{queryRange: queryRange, entities: entities}
 				} else {
+					status.WriteQueryRangeSuccess(queryRange)
 					wg.Done()
 				}
 			case <-worker.QuitChan:

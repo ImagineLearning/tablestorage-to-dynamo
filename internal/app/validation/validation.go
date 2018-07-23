@@ -4,8 +4,8 @@ package validation
 // 	"sync"
 
 // 	"github.com/Azure/azure-sdk-for-go/storage"
-// 	"github.com/tablestorage-to-dynamo-migration/internal/app/migration"
-// 	dp "github.com/tablestorage-to-dynamo-migration/internal/pkg/dataprovider"
+// 	"github.com/tablestorage-to-dynamo/internal/app/migration"
+// 	dp "github.com/tablestorage-to-dynamo/internal/pkg/dataprovider"
 // )
 
 // type Validation struct {
@@ -24,7 +24,7 @@ package validation
 
 // 	return Validation{
 // 		TableStorage:            dp.NewTableStorageProvider(migrationConfig.TableStorage),
-// 		Dynamo:                  dp.NewDynamoProvier(migrationConfig.Dynamo),
+// 		Dynamo:                  dp.NewDynamoProvider(migrationConfig.Dynamo),
 // 		TableStorageWorkQueue:   make(chan dp.DateRange, migrationConfig.BufferSize),
 // 		TableStorageWorkerQueue: make(chan chan dp.DateRange, migrationConfig.NumWorkers),
 // 		DynamoWorkQueue:         make(chan []*storage.Entity, migrationConfig.BufferSize),

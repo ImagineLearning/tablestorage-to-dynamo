@@ -3,11 +3,11 @@ package dataprovider
 import (
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
+// TableStorageConfig all config data required to init table storage connection
 type TableStorageConfig struct {
 	AccountName string   `required:"true"`
 	AccountKey  string   `required:"true"`
@@ -15,16 +15,12 @@ type TableStorageConfig struct {
 	ColumnNames []string `required:"true"` // an array of column names other than partition key, row key, and timestamp
 }
 
+// TableStorageProvider reference to table storage table
 type TableStorageProvider struct {
 	Table *storage.Table
 }
 
-type DateRange struct {
-	FromDate string
-	ToDate   string
-}
-
-// InitTableStorageProvider connects to table storage and dynamo tables
+// NewTableStorageProvider connects to table storage and dynamo tables
 func NewTableStorageProvider(config TableStorageConfig) TableStorageProvider {
 	cli, err := storage.NewBasicClient(config.AccountName, config.AccountKey)
 
@@ -39,42 +35,44 @@ func NewTableStorageProvider(config TableStorageConfig) TableStorageProvider {
 	}
 }
 
-// NewDateRange returns a UTC string representation of a date range
-// For example, NewDateRange(1, 1) will return the rang of yesterday with a 1 day span (yesterday to today)
-func NewDateRange(fromOffset int, dateRange int) DateRange {
-	from := (fromOffset * dateRange)
-	to := (fromOffset * dateRange) - dateRange
-	return DateRange{
-		FromDate: time.Now().AddDate(0, 0, -from).UTC().Format("2006-01-02T15:04:05.999999Z"),
-		ToDate:   time.Now().AddDate(0, 0, -to).UTC().Format("2006-01-02T15:04:05.999999Z"),
+// QueryRange query on partition key in the range greater than equal to Ge and less than Lt
+type QueryRange struct {
+	Ge string
+	Lt string
+}
+
+// NewQueryRange builds a new query range from ge and lt
+func NewQueryRange(ge string, lt string) QueryRange {
+	return QueryRange{
+		Ge: ge,
+		Lt: lt,
 	}
 }
 
-// ReadDateRange queries table storage on a date range and fills up the work queue
-// TODO: Error handling.
-func (provider *TableStorageProvider) ReadDateRange(dateRange DateRange) []*storage.Entity {
+// ReadRange queries table storage on a range and returns the response
+func (provider *TableStorageProvider) ReadRange(queryRange QueryRange) ([]*storage.Entity, error) {
 	results := []*storage.Entity{}
-	filter := fmt.Sprintf("Timestamp ge datetime'%v' and Timestamp le datetime'%v'", dateRange.FromDate, dateRange.ToDate)
-
+	filter := fmt.Sprintf("PartitionKey ge '%v' and PartitionKey lt '%v'", queryRange.Ge, queryRange.Lt)
 	options := storage.QueryOptions{
 		Filter: filter,
 	}
 
 	result, err := provider.Table.QueryEntities(30, storage.FullMetadata, &options)
-
 	if err != nil {
-		fmt.Println(err)
+		log.Printf("Error reading range from table storage: %v", err)
+		return nil, err
 	}
 
 	results = append(results, result.Entities...)
+
 	for result.NextLink != nil {
 		result, err = result.NextResults(nil)
-
 		if err != nil {
-			fmt.Println(err)
+			log.Printf("Error reading next page from table storage: %v", err)
+			return nil, err
 		}
 
 		results = append(results, result.Entities...)
 	}
-	return results
+	return results, nil
 }

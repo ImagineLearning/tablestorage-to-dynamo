@@ -1,62 +1,40 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ts-to-dynamo-migration-job-2
+  name: job2 
   namespace: migration
 spec:
   template:
     spec:
       containers:
       - name: ts-to-dynamo-migration
-        image: ilprovo/ts-to-dynamo-migration:v1.0.2
+        image: ilprovo/ts-to-dynamo-migration:v1.0.10
         env:
-          - name: AWS_ACCESS_KEY_ID 
-            valueFrom:
-              secretKeyRef:
-                name: migration-secret
-                key: AWS_ACCESS_KEY_ID 
-          - name: AWS_SECRET_ACCESS_KEY
-            valueFrom:
-              secretKeyRef:
-                name: migration-secret
-                key: AWS_SECRET_ACCESS_KEY 
-          - name: DYNAMO_REGION
-            valueFrom:
-              secretKeyRef:
-                name: migration-secret
-                key: DYNAMO_REGION
           - name: DYNAMO_TABLENAME
-            valueFrom:
-              secretKeyRef:
-                name: migration-secret
-                key: DYNAMO_TABLENAME
-          - name: TABLESTORAGE_ACCOUNTKEY
-            valueFrom:
-              secretKeyRef:
-                name: migration-secret
-                key: TABLESTORAGE_ACCOUNTKEY 
+            value: "DynamoTableName"
+          - name: DYNAMO_REGION
+            value: "us-west-2"
+          - name: DYNAMO_MIGRATIONSTATUSTABLENAME
+            value: "DynamoMigrationStatusTableName"
           - name: TABLESTORAGE_ACCOUNTNAME
-            valueFrom:
-              secretKeyRef:
-                name: migration-secret
-                key: TABLESTORAGE_ACCOUNTNAME
-          - name: TABLESTORAGE_COLUMNNAMES
-            valueFrom:
-              secretKeyRef:
-                name: migration-secret
-                key: TABLESTORAGE_COLUMNNAMES
+            value: "TSAccountName"
+          - name: TABLESTORAGE_ACCOUNTKEY
+            value: "TSAccountKey"
           - name: TABLESTORAGE_TABLENAME
-            valueFrom:
-              secretKeyRef:
-                name: migration-secret
-                key: TABLESTORAGE_TABLENAME
+            value: "TSTableName"
+          - name: TABLESTORAGE_COLUMNNAMES
+            value: "Col1,Col2,Col3"
+          - name: AWS_ACCESS_KEY_ID 
+            value: "AWSAccessKeyId"
+          - name: AWS_SECRET_ACCESS_KEY 
+            value: "AWSSecretAccessKey"
           - name: NUMWORKERS 
-            value: "50"
-          - name: STARTDATEOFFSET 
-            value: "50"
-          - name: ENDDATEOFFSET 
-            value: "0"
+            value: "400"
           - name: BUFFERSIZE 
-            value: "500"
+            value: "800"
+          - name: RANGES
+            value: "8,a,c,e,g"
+          - name: RANGEPRECISION
+            value: "4"
       restartPolicy: Never
-  backoffLimit: 4
+  backoffLimit: 10
