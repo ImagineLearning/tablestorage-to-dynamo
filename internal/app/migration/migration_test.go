@@ -5,7 +5,7 @@ import (
 )
 
 func TestMigrate(t *testing.T) {
-	migration := NewMigration(Config)
+	migration := NewMigration(config)
 	migration.Start()
 
 	results := migration.Dynamo.ScanTable()
@@ -16,7 +16,7 @@ func TestMigrate(t *testing.T) {
 }
 
 func TestUndo(t *testing.T) {
-	migration := NewMigration(Config)
+	migration := NewMigration(config)
 	migration.Undo()
 
 	results := migration.Dynamo.ScanTable()

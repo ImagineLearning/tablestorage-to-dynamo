@@ -6,11 +6,11 @@ import (
 )
 
 var (
-	Config MigrationConfig
+	config Config
 )
 
 func TestMain(m *testing.M) {
-	Config = LoadMigrationConfig()
+	config = LoadMigrationConfig()
 	retCode := m.Run()
 	os.Exit(retCode)
 }

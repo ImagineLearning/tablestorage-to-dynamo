@@ -12,16 +12,18 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
-type DynamoReadWork chan []map[string]*dynamodb.AttributeValue
+type dynamoReadWork chan []map[string]*dynamodb.AttributeValue
 
+// DynamoReadWorker worker consists of work and shared worker pool
 type DynamoReadWorker struct {
 	ID         int
-	Work       DynamoReadWork
-	WorkerPool chan DynamoReadWork
+	Work       dynamoReadWork
+	WorkerPool chan dynamoReadWork
 	QuitChan   chan bool
 }
 
-func NewDynamoReadWorker(id int, workerPool chan DynamoReadWork) DynamoReadWorker {
+// NewDynamoReadWorker given shared worker pool creates a new dynamo read worker that will be added to worker pool.
+func NewDynamoReadWorker(id int, workerPool chan dynamoReadWork) DynamoReadWorker {
 	worker := DynamoReadWorker{
 		ID:         id,
 		Work:       make(chan []map[string]*dynamodb.AttributeValue),
@@ -31,14 +33,14 @@ func NewDynamoReadWorker(id int, workerPool chan DynamoReadWork) DynamoReadWorke
 	return worker
 }
 
-// func Start()
-
+// Stop halts worker
 func (worker *DynamoReadWorker) Stop() {
 	go func() {
 		worker.QuitChan <- true
 	}()
 }
 
+// DynamoWriteBatch represents a query range and corresponding entries in that range
 type DynamoWriteBatch struct {
 	queryRange QueryRange
 	entities   []*storage.Entity
@@ -63,14 +65,14 @@ func NewDynamoWriteWorker(id int, workerPool chan DynamoWriteWork) DynamoWriteWo
 	return worker
 }
 
-func StorageEntityToDynamoKey(entity *storage.Entity) map[string]*dynamodb.AttributeValue {
+func storageEntityToDynamoKey(entity *storage.Entity) map[string]*dynamodb.AttributeValue {
 	return map[string]*dynamodb.AttributeValue{
 		"PartitionKey": {S: aws.String(entity.PartitionKey)},
 		"RowKey":       {S: aws.String(entity.RowKey)},
 	}
 }
 
-func StorageEntityToDynamoMap(entity *storage.Entity, columnNames *[]string) map[string]*dynamodb.AttributeValue {
+func storageEntityToDynamoMap(entity *storage.Entity, columnNames *[]string) map[string]*dynamodb.AttributeValue {
 	dynamoMap := map[string]*dynamodb.AttributeValue{
 		"PartitionKey": {S: aws.String(entity.PartitionKey)},
 		"RowKey":       {S: aws.String(entity.RowKey)},
@@ -109,7 +111,7 @@ func (worker *DynamoWriteWorker) Start(dynamo *DynamoProvider, status *DynamoPro
 
 				dynamoMapList := make([]map[string]*dynamodb.AttributeValue, len(writeBatch.entities))
 				for i, entity := range writeBatch.entities {
-					dynamoMapList[i] = StorageEntityToDynamoMap(entity, columnNames)
+					dynamoMapList[i] = storageEntityToDynamoMap(entity, columnNames)
 				}
 
 				dynamo.WriteToDynamo(dynamoMapList, GetDynamoPutRequests)
@@ -135,7 +137,7 @@ func (worker *DynamoWriteWorker) StartDelete(dynamo *DynamoProvider, wg *sync.Wa
 
 				dynamoMapList := make([]map[string]*dynamodb.AttributeValue, len(writeBatch.entities))
 				for i, entity := range writeBatch.entities {
-					dynamoMapList[i] = StorageEntityToDynamoKey(entity)
+					dynamoMapList[i] = storageEntityToDynamoKey(entity)
 				}
 
 				dynamo.WriteToDynamo(dynamoMapList, GetDynamoDeleteRequests)

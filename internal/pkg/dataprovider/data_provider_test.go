@@ -38,23 +38,19 @@ func TestNewDynamoProvider(t *testing.T) {
 	}
 }
 
-func TestNewMigrationStatusTable(t *testing.T) {
+func TestMigrationStatusTable(t *testing.T) {
 	newConfig := Config.Dynamo
 	newConfig.MigrationStatusTableName = "testMigrationStatusTable"
 	provider := NewMigrationStatusProvider(newConfig)
 	err := provider.NewMigrationStatusTable()
 
 	if err != nil {
-		t.Errorf("Could not create migration status table.")
+		t.Errorf("Could not create migration status table: %v", err)
+	}
+
+	err = provider.DeleteMigrationStatusTable()
+
+	if err != nil {
+		t.Errorf("Could not delete migration status table: %v", err)
 	}
 }
-
-// func TestWriteSuccessfulRangeStatus(t *testing.T) {
-// 	newConfig := Config.Dynamo
-// 	newConfig.MigrationStatusTableName = "testMigrationStatusTable"
-
-// 	provider := NewMigrationStatusProvider(newConfig)
-// 	provider.NewMigrationStatusTable()
-
-// 	provider.WriteQueryRangeSuccess(QueryRange{Ge: "00", Lt: "0f"})
-// }

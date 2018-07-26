@@ -16,7 +16,6 @@ func main() {
 	config := migration.LoadMigrationConfig()
 	migration := migration.NewMigration(config)
 	migration.Start()
-	//migration.Undo()
 
 	elapsed := time.Now().Sub(startTime)
 	log.Printf("Total migration time: %v\n", elapsed)
