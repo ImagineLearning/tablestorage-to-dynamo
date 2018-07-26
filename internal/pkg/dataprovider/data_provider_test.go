@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewTableStorageProvider(t *testing.T) {
-	provider := NewTableStorageProvider(Config.TableStorage)
+	provider := NewTableStorageProvider(config.TableStorage)
 
 	if provider.Table == nil {
 		t.Errorf("Could not initialize table storage provider.")
@@ -22,7 +22,7 @@ func TestNewQueryRange(t *testing.T) {
 
 func TestReadFromTableStorage(t *testing.T) {
 
-	provider := NewTableStorageProvider(Config.TableStorage)
+	provider := NewTableStorageProvider(config.TableStorage)
 	results, err := provider.ReadRange(NewQueryRange("00", "0f"))
 
 	if len(results) == 0 || err != nil {
@@ -31,7 +31,7 @@ func TestReadFromTableStorage(t *testing.T) {
 }
 
 func TestNewDynamoProvider(t *testing.T) {
-	provider := NewDynamoProvider(Config.Dynamo)
+	provider := NewDynamoProvider(config.Dynamo)
 
 	if provider.TableName == "" || provider.Service == nil {
 		t.Errorf("Could not initialize dynamo provider.")
@@ -39,7 +39,7 @@ func TestNewDynamoProvider(t *testing.T) {
 }
 
 func TestMigrationStatusTable(t *testing.T) {
-	newConfig := Config.Dynamo
+	newConfig := config.Dynamo
 	newConfig.MigrationStatusTableName = "testMigrationStatusTable"
 	provider := NewMigrationStatusProvider(newConfig)
 	err := provider.NewMigrationStatusTable()
