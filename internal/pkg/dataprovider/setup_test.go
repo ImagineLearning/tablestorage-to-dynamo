@@ -14,7 +14,7 @@ type TestingConfig struct {
 }
 
 var (
-	Config TestingConfig
+	config TestingConfig
 )
 
 func LoadTestingConfig() TestingConfig {
@@ -42,7 +42,7 @@ func LoadTestingConfig() TestingConfig {
 }
 
 func TestMain(m *testing.M) {
-	Config = LoadTestingConfig()
+	config = LoadTestingConfig()
 	retCode := m.Run()
 	os.Exit(retCode)
 }

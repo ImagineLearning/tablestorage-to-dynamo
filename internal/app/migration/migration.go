@@ -13,7 +13,8 @@ var (
 	hexCodes = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"}
 )
 
-type MigrationConfig struct {
+// Config represents all config values needed for a migration.
+type Config struct {
 	Dynamo         dp.DynamoConfig
 	TableStorage   dp.TableStorageConfig
 	NumWorkers     int      `default:"100"`
@@ -22,8 +23,9 @@ type MigrationConfig struct {
 	RangePrecision int      `default:"3"`
 }
 
-func LoadMigrationConfig() MigrationConfig {
-	var config MigrationConfig
+// LoadMigrationConfig loads all migration configuration values from env vars.
+func LoadMigrationConfig() Config {
+	var config Config
 
 	var dynamoConfig dp.DynamoConfig
 	err := envconfig.Process("DYNAMO", &dynamoConfig)
@@ -53,6 +55,7 @@ func LoadMigrationConfig() MigrationConfig {
 	return config
 }
 
+// Migration contains all objects needed for migration including work queues and worker pools
 type Migration struct {
 	TableStorage    dp.TableStorageProvider
 	Dynamo          dp.DynamoProvider
@@ -61,12 +64,12 @@ type Migration struct {
 	ReadWorkerPool  chan dp.TableStorageReadWork
 	WriteWorkQueue  dp.DynamoWriteWork
 	WriteWorkerPool chan dp.DynamoWriteWork
-	Config          MigrationConfig
+	Config          Config
 	WaitGrp         *sync.WaitGroup
 }
 
 // NewMigration returns a migration which has the table storage table, work queue, wait group, etc
-func NewMigration(migrationConfig MigrationConfig) Migration {
+func NewMigration(migrationConfig Config) Migration {
 	statusProvider := dp.NewMigrationStatusProvider(migrationConfig.Dynamo)
 	statusProvider.NewMigrationStatusTable()
 

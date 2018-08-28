@@ -1,6 +1,7 @@
 package dataprovider
 
 import (
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -12,9 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
-
-// DynamoOperation typecast func for delete and batch write requests
-type DynamoOperation func(input []map[string]*dynamodb.AttributeValue, wg *sync.WaitGroup)
 
 // GetWriteRequests typecast func for building delete and write request structs
 type GetWriteRequests func(input []map[string]*dynamodb.AttributeValue) []*dynamodb.WriteRequest
@@ -59,6 +57,40 @@ func NewMigrationStatusProvider(config DynamoConfig) DynamoProvider {
 	}
 }
 
+func (dynamoProvider *DynamoProvider) waitForTableToBeReady() error {
+	maxWaitSeconds := 60
+	currentWaitSeconds := 0
+	ticker := time.Tick(1 * time.Second)
+
+	for range ticker {
+		currentWaitSeconds++
+		if currentWaitSeconds > maxWaitSeconds {
+			return errors.New("table did not become ready within 1 minute")
+		}
+
+		describeTableInput := &dynamodb.DescribeTableInput{
+			TableName: &dynamoProvider.TableName,
+		}
+
+		response, err := dynamoProvider.Service.DescribeTable(describeTableInput)
+
+		if err != nil {
+			return err
+		}
+
+		if response.Table == nil {
+			continue
+		}
+
+		status := *response.Table.TableStatus
+		if status == dynamodb.TableStatusActive {
+			return nil
+		}
+	}
+
+	return nil
+}
+
 // NewMigrationStatusTable creates a new status table to store the state of the migration (i.e successfully migrated ranges)
 func (dynamoProvider *DynamoProvider) NewMigrationStatusTable() error {
 	input := &dynamodb.CreateTableInput{
@@ -83,8 +115,8 @@ func (dynamoProvider *DynamoProvider) NewMigrationStatusTable() error {
 			},
 		},
 		ProvisionedThroughput: &dynamodb.ProvisionedThroughput{
-			ReadCapacityUnits:  aws.Int64(10),
-			WriteCapacityUnits: aws.Int64(10),
+			ReadCapacityUnits:  aws.Int64(100),
+			WriteCapacityUnits: aws.Int64(100),
 		},
 		TableName: &dynamoProvider.TableName,
 	}
@@ -95,9 +127,9 @@ func (dynamoProvider *DynamoProvider) NewMigrationStatusTable() error {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case dynamodb.ErrCodeTableAlreadyExistsException:
-				log.Println("Status table already exists for migration. Using data from migration status table.")
+				log.Println("Status table already exists from previous migration. Using status data.")
 			case dynamodb.ErrCodeResourceInUseException:
-				log.Println("Status table already exists for migration. Using data from migration status table.")
+				log.Println("Status table already exists from previous migration. Using status data.")
 			default:
 				log.Printf("Got error calling CreateTable: %v", err)
 			}
@@ -108,8 +140,9 @@ func (dynamoProvider *DynamoProvider) NewMigrationStatusTable() error {
 	}
 
 	log.Printf("Initializing status table.")
-	time.Sleep(2 * time.Second)
+	dynamoProvider.waitForTableToBeReady()
 	log.Printf("Created table %v", dynamoProvider.TableName)
+
 	return nil
 }
 
@@ -126,6 +159,7 @@ func (dynamoProvider *DynamoProvider) DeleteMigrationStatusTable() error {
 		return err
 	}
 
+	log.Printf("Deleted table %v", dynamoProvider.TableName)
 	return nil
 }
 
