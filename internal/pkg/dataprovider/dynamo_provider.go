@@ -163,7 +163,7 @@ func (dynamoProvider *DynamoProvider) DeleteMigrationStatusTable() error {
 	return nil
 }
 
-// ScanStatusTable reads all ranges from status table
+// ScanStatusTable reads all successfully migrated ranges from status table
 func (dynamoProvider *DynamoProvider) ScanStatusTable() []QueryRange {
 	migrationStatus := []QueryRange{}
 

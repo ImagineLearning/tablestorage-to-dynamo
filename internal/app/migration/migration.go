@@ -118,7 +118,7 @@ func (migration *Migration) generateRanges(ranges chan string, currentPrecision 
 	migration.generateRanges(ranges, currentPrecision)
 }
 
-func (migration *Migration) dispatchReadWork(alreadyMigrated []dp.QueryRange) {
+func (migration *Migration) createReadWork(alreadyMigrated []dp.QueryRange) {
 	ranges := make(chan string, 150000)
 	migration.generateRanges(ranges, 0)
 
@@ -170,8 +170,8 @@ func (migration *Migration) Start() {
 
 	alreadyMigrated := migration.Status.ScanStatusTable()
 
-	// Create and dispatch read work
-	migration.dispatchReadWork(alreadyMigrated)
+	// Create and add read work
+	migration.createReadWork(alreadyMigrated)
 
 	// Wait for work to be completed
 	migration.WaitGrp.Wait()
@@ -208,7 +208,7 @@ func (migration *Migration) Undo() {
 	}()
 
 	// Create and dispatch read work
-	migration.dispatchReadWork([]dp.QueryRange{})
+	migration.createReadWork([]dp.QueryRange{})
 
 	// Wait for work to be completed
 	migration.WaitGrp.Wait()
