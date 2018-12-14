@@ -5,8 +5,8 @@ import (
 	"os"
 	"sync"
 
+	dp "github.com/ImagineLearning/tablestorage-to-dynamo/internal/pkg/dataprovider"
 	"github.com/kelseyhightower/envconfig"
-	dp "github.com/tablestorage-to-dynamo/internal/pkg/dataprovider"
 )
 
 var (
