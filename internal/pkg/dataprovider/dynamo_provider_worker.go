@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
-	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/aws/aws-sdk-go/aws"
@@ -72,33 +72,30 @@ func storageEntityToDynamoKey(entity *storage.Entity) map[string]*dynamodb.Attri
 	}
 }
 
+// what product to set? 1 - just set ILL; 2 - use activity list to decide right products; 3 - add "unknown" product; 4 - just leave blank
+
 func storageEntityToDynamoMap(entity *storage.Entity, columnNames *[]string) map[string]*dynamodb.AttributeValue {
-	dynamoMap := map[string]*dynamodb.AttributeValue{
-		"PartitionKey": {S: aws.String(entity.PartitionKey)},
-		"RowKey":       {S: aws.String(entity.RowKey)},
-		"Timestamp":    {S: aws.String(entity.TimeStamp.UTC().Format("2006-01-02T15:04:05.999999Z"))},
+	attributeValue := 0
+
+	if entity.Properties["ArtifactType"].(string) == "Writing" {
+		attributeValue = 1
 	}
 
-	for _, key := range *columnNames {
-		switch value := entity.Properties[key].(type) {
-		case string:
-			if value != "" {
-				dynamoMap[key] = &dynamodb.AttributeValue{S: aws.String(value)}
-			}
-		case int32:
-			dynamoMap[key] = &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(int64(value), 10))}
-		case int64:
-			dynamoMap[key] = &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(value, 10))}
-		case float64:
-			dynamoMap[key] = &dynamodb.AttributeValue{N: aws.String(strconv.FormatFloat(value, 'f', -1, 64))}
-		case bool:
-			dynamoMap[key] = &dynamodb.AttributeValue{BOOL: aws.Bool(value)}
-		case time.Time:
-			dynamoMap[key] = &dynamodb.AttributeValue{S: aws.String(value.UTC().Format("2006-01-02T15:04:05.999999Z"))}
-		}
+	return map[string]*dynamodb.AttributeValue{
+		"ArtifactId":         &dynamodb.AttributeValue{S: aws.String(entity.RowKey)},
+		"ArtifactType":       &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(int64(attributeValue), 10))}, // fix the type here
+		"Created":            &dynamodb.AttributeValue{S: aws.String(entity.TimeStamp.UTC().Format("2006-01-02T15:04:05.999999Z"))},
+		"InternalProductKey": &dynamodb.AttributeValue{S: aws.String(fmt.Sprintf("%s/%s", entity.Properties["Activity"], entity.Properties["Dataset"]))},
+		"IsDeleting":         &dynamodb.AttributeValue{BOOL: aws.Bool(false)},
+		"Product":            &dynamodb.AttributeValue{N: aws.String("0")}, // All are lang and lit here
+		"StudentId":          &dynamodb.AttributeValue{S: aws.String(entity.PartitionKey)},
+		"Title":              &dynamodb.AttributeValue{S: aws.String(entity.Properties["Title"].(string))},
+		"Url":                &dynamodb.AttributeValue{S: aws.String(strings.Replace(entity.Properties["Url"].(string), ".", "/", -1))},
+		"Description":        &dynamodb.AttributeValue{S: aws.String(entity.Properties["Description"].(string))},
+		"Review":             &dynamodb.AttributeValue{BOOL: aws.Bool(entity.Properties["Review"].(bool))},
+		"Text":               &dynamodb.AttributeValue{S: aws.String(entity.Properties["Text"].(string))},
+		"Updated":            &dynamodb.AttributeValue{S: aws.String(entity.TimeStamp.UTC().Format("2006-01-02T15:04:05.999999Z"))},
 	}
-
-	return dynamoMap
 }
 
 func (worker *DynamoWriteWorker) Start(dynamo *DynamoProvider, status *DynamoProvider, columnNames *[]string, wg *sync.WaitGroup) {
